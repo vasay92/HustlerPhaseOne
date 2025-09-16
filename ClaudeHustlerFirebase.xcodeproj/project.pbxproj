@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		EB217BA82E7A173000D9C2A3 /* ValidationHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB217BA72E7A172E00D9C2A3 /* ValidationHelper.swift */; };
+		EB217BAA2E7A174200D9C2A3 /* CacheManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB217BA92E7A174100D9C2A3 /* CacheManager.swift */; };
+		EB217BAC2E7A175400D9C2A3 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB217BAB2E7A175300D9C2A3 /* NetworkMonitor.swift */; };
+		EB217BAE2E7A176600D9C2A3 /* RateLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB217BAD2E7A176600D9C2A3 /* RateLimiter.swift */; };
 		EB6BBA482E68F52F006DB468 /* ClaudeHustlerFirebaseApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB6BBA472E68F52F006DB468 /* ClaudeHustlerFirebaseApp.swift */; };
 		EB6BBA4A2E68F52F006DB468 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB6BBA492E68F52F006DB468 /* ContentView.swift */; };
 		EB6BBA762E68F6BB006DB468 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = EB6BBA752E68F6BB006DB468 /* FirebaseAuth */; };
@@ -40,6 +44,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		EB217BA72E7A172E00D9C2A3 /* ValidationHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValidationHelper.swift; sourceTree = "<group>"; };
+		EB217BA92E7A174100D9C2A3 /* CacheManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheManager.swift; sourceTree = "<group>"; };
+		EB217BAB2E7A175300D9C2A3 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
+		EB217BAD2E7A176600D9C2A3 /* RateLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateLimiter.swift; sourceTree = "<group>"; };
 		EB6BBA442E68F52F006DB468 /* ClaudeHustlerFirebase.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClaudeHustlerFirebase.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EB6BBA472E68F52F006DB468 /* ClaudeHustlerFirebaseApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeHustlerFirebaseApp.swift; sourceTree = "<group>"; };
 		EB6BBA492E68F52F006DB468 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -165,6 +173,10 @@
 		EB6BBA6E2E68F5B5006DB468 /* ClaudeHustlerFirebase */ = {
 			isa = PBXGroup;
 			children = (
+				EB217BAD2E7A176600D9C2A3 /* RateLimiter.swift */,
+				EB217BAB2E7A175300D9C2A3 /* NetworkMonitor.swift */,
+				EB217BA92E7A174100D9C2A3 /* CacheManager.swift */,
+				EB217BA72E7A172E00D9C2A3 /* ValidationHelper.swift */,
 				EB6BBA722E68F5E9006DB468 /* Views */,
 				EB6BBA712E68F5E3006DB468 /* Services */,
 				EB6BBA702E68F5DD006DB468 /* Models */,
@@ -382,10 +394,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EB217BAA2E7A174200D9C2A3 /* CacheManager.swift in Sources */,
+				EB217BA82E7A173000D9C2A3 /* ValidationHelper.swift in Sources */,
 				EB6BBA802E68F9CF006DB468 /* DataModels.swift in Sources */,
 				EB6BBA8F2E68FAF9006DB468 /* MainTabView.swift in Sources */,
+				EB217BAE2E7A176600D9C2A3 /* RateLimiter.swift in Sources */,
 				EB6BBAC02E69325D006DB468 /* PostDetailView.swift in Sources */,
 				EB6BBB372E70D070006DB468 /* ContentPreviewCard.swift in Sources */,
+				EB217BAC2E7A175400D9C2A3 /* NetworkMonitor.swift in Sources */,
 				EB6BBA4A2E68F52F006DB468 /* ContentView.swift in Sources */,
 				EB6BBAB22E6914F9006DB468 /* PostOptionsView.swift in Sources */,
 				EB6BBA822E68F9DF006DB468 /* FirebaseService.swift in Sources */,
