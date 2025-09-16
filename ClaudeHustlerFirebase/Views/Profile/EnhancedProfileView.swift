@@ -697,7 +697,7 @@ struct UserPostCard: View {
     var body: some View {
         HStack(spacing: 12) {
             // Image or placeholder
-            if !post.imageURLs.isEmpty, let firstImageURL = post.imageURLs.first {
+            if !post.mediaURLs.isEmpty, let firstImageURL = post.mediaURLs.first {
                 AsyncImage(url: URL(string: firstImageURL)) { phase in
                     switch phase {
                     case .success(let image):

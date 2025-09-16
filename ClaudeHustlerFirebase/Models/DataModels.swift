@@ -312,6 +312,31 @@ enum ServiceCategory: String, Codable, CaseIterable {
         case .other: return "ellipsis.circle.fill"
         }
     }
+    
+    var displayName: String {
+        switch self {
+        case .cleaning: return "Cleaning"
+        case .plumbing: return "Plumbing"
+        case .electrical: return "Electrical"
+        case .painting: return "Painting"
+        case .landscaping: return "Landscaping"
+        case .moving: return "Moving"
+        case .handyman: return "Handyman"
+        case .tutoring: return "Tutoring"
+        case .personalTraining: return "Personal Training"
+        case .photography: return "Photography"
+        case .videography: return "Videography"
+        case .webDesign: return "Web Design"
+        case .graphicDesign: return "Graphic Design"
+        case .writing: return "Writing"
+        case .translation: return "Translation"
+        case .petCare: return "Pet Care"
+        case .childCare: return "Child Care"
+        case .delivery: return "Delivery"
+        case .assembly: return "Assembly"
+        case .other: return "Other"
+        }
+    }
 }
 
 enum PriceType: String, Codable {
@@ -559,6 +584,8 @@ struct Message: Codable, Identifiable, Validatable {
     var mediaType: MessageMediaType?
     var contextType: MessageContextType?
     var contextId: String?
+    var contextTitle: String?  // Added
+    var contextImage: String?  // Added
     var replyTo: String? // Message ID being replied to
     var isEdited: Bool = false
     var editedAt: Date?
@@ -580,6 +607,9 @@ struct Message: Codable, Identifiable, Validatable {
         case service
         case portfolio
         case general
+        case post    // Added
+        case reel    // Added
+        case status  // Added
     }
     
     // Validation
@@ -599,6 +629,7 @@ struct Message: Codable, Identifiable, Validatable {
         return errors
     }
 }
+
 
 // MARK: - Status Model (for Stories/Status updates)
 struct Status: Codable, Identifiable, Validatable, Cacheable {
