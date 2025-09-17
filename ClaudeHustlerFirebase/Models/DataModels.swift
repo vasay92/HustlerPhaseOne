@@ -60,7 +60,10 @@ struct User: Codable, Identifiable, Validatable, Cacheable {
     
     // Alias for backward compatibility
     var imageURLs: [String] {
-        mediaURLs
+        if let profileImageURL = self.profileImageURL {
+            return [profileImageURL]
+        }
+        return []
     }
     
     // Validation

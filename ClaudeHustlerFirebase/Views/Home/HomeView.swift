@@ -38,7 +38,7 @@ struct HomeView: View {
                 VStack(spacing: 20) {
                     // Custom Navigation Bar
                     HStack {
-                        Text("Hustler") // Changed from "ClaudeHustler" to "Hustler"
+                        Text("Hustler")
                             .font(.largeTitle)
                             .fontWeight(.bold)
                             .foregroundStyle(
@@ -99,7 +99,6 @@ struct HomeView: View {
                                         NavigationLink(destination: PostDetailView(post: post)) {
                                             MiniServiceCard(post: post)
                                         }
-                                        .buttonStyle(PlainButtonStyle())
                                     }
                                 }
                                 .padding(.horizontal)
@@ -107,70 +106,85 @@ struct HomeView: View {
                         }
                     }
                     
-                    // Recent Activity
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Recent Activity")
-                            .font(.headline)
-                            .padding(.horizontal)
-                        
-                        LazyVStack(spacing: 15) {
-                            ForEach(filteredPosts) { post in
-                                NavigationLink(destination: PostDetailView(post: post)) {
-                                    ServicePostCard(post: post)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                            }
-                        }
-                        .padding(.horizontal)
+                    // Search Bar
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.gray)
+                        TextField("Search services...", text: $searchText)
                     }
+                    .padding(10)
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(10)
+                    .padding(.horizontal)
+                    
+                    // Tabs
+                    Picker("Service Type", selection: $selectedTab) {
+                        Text("Offers").tag(0)
+                        Text("Requests").tag(1)
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                    .padding(.horizontal)
+                    
+                    // Posts List
+                    LazyVStack(spacing: 15) {
+                        ForEach(filteredPosts) { post in
+                            NavigationLink(destination: PostDetailView(post: post)) {
+                                ServicePostCard(post: post)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                        
+                        if filteredPosts.isEmpty {
+                            VStack(spacing: 10) {
+                                Image(systemName: selectedTab == 0 ? "briefcase" : "magnifyingglass")
+                                    .font(.largeTitle)
+                                    .foregroundColor(.gray)
+                                
+                                Text(selectedTab == 0 ? "No services available" : "No requests yet")
+                                    .font(.headline)
+                                    .foregroundColor(.gray)
+                                
+                                Text(selectedTab == 0 ? "Be the first to offer a service!" : "Be the first to request help!")
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                            }
+                            .padding(.vertical, 50)
+                        }
+                    }
+                    .padding(.horizontal)
                 }
+                .padding(.bottom, 20)
             }
             .navigationBarHidden(true)
-            .refreshable {
-                await firebase.loadPosts()
-                await updateUnreadCount()
-            }
             .sheet(isPresented: $showingFilters) {
-                FilterView()
+                FiltersView()
             }
-            .fullScreenCover(isPresented: $showingMessages) {
-                NavigationView {
-                    ConversationsListView()
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Button("Close") {
-                                    showingMessages = false
-                                }
-                            }
-                        }
-                }
+            .sheet(isPresented: $showingMessages) {
+                ConversationsListView()
             }
-            .onAppear {
-                Task {
-                    await firebase.loadPosts()
-                    await updateUnreadCount()
-                    startListeningToUnreadCount()
-                }
-            }
-            .onDisappear {
-                conversationsListener?.remove()
-            }
+        }
+        .task {
+            await firebase.loadPosts()
+            await setupConversationsListener()
+            await updateUnreadCount()
+        }
+        .onDisappear {
+            conversationsListener?.remove()
         }
     }
     
-    // MARK: - Real-time Unread Count
-    
-    private func startListeningToUnreadCount() {
-        // Remove any existing listener
-        conversationsListener?.remove()
+    private func setupConversationsListener() async {
+        guard let userId = firebase.currentUser?.id else { return }
         
-        // Set up real-time listener for conversations
-        conversationsListener = firebase.listenToConversations { conversations in
-            Task { @MainActor in
+        conversationsListener = firebase.db.collection("conversations")
+            .whereField("participantIds", arrayContains: userId)
+            .addSnapshotListener { snapshot, error in
+                guard let documents = snapshot?.documents else { return }
+                
                 var total = 0
-                if let userId = firebase.currentUser?.id {
-                    for conversation in conversations {
-                        total += conversation.unreadCounts[userId] ?? 0
+                for document in documents {
+                    if let unreadCounts = document.data()["unreadCounts"] as? [String: Int] {
+                        total += unreadCounts[userId] ?? 0
                     }
                 }
                 
@@ -181,7 +195,6 @@ struct HomeView: View {
                 
                 print("📬 Unread message count updated: \(total)")
             }
-        }
     }
     
     private func updateUnreadCount() async {
@@ -194,7 +207,7 @@ struct HomeView: View {
     }
 }
 
-// Service Post Card
+// MARK: - Service Post Card
 struct ServicePostCard: View {
     let post: ServicePost
     @StateObject private var firebase = FirebaseService.shared
@@ -202,10 +215,10 @@ struct ServicePostCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Image section if images exist
-            if !post.imageURLs.isEmpty {
+            // Image section if images exist - FIXED: using mediaURLs
+            if !post.mediaURLs.isEmpty {
                 TabView {
-                    ForEach(post.imageURLs, id: \.self) { imageURL in
+                    ForEach(post.mediaURLs, id: \.self) { imageURL in
                         AsyncImage(url: URL(string: imageURL)) { phase in
                             switch phase {
                             case .success(let image):
@@ -309,123 +322,138 @@ struct ServicePostCard: View {
                     .lineLimit(2)
             }
             
-            // Footer
+            // Price and Category
             HStack {
-                // Price
                 if let price = post.price {
-                    Text("$\(Int(price))")
-                        .font(.headline)
+                    Label("$\(Int(price))", systemImage: "tag.fill")
+                        .font(.subheadline)
                         .foregroundColor(.green)
                 }
                 
-                // Category
+                Spacer()
+                
                 Text(post.category.displayName)
                     .font(.caption)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(Color.blue.opacity(0.1))
                     .foregroundColor(.blue)
-                    .cornerRadius(8)
+                    .cornerRadius(6)
+            }
+            
+            // Action Buttons
+            HStack(spacing: 20) {
+                Button(action: {
+                    // Like action
+                }) {
+                    Label("\(post.likes.count)", systemImage: "heart")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
+                
+                Button(action: {
+                    // Comment action
+                }) {
+                    Label("0", systemImage: "bubble.left")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
                 
                 Spacer()
                 
-                // Actions
-                HStack(spacing: 15) {
-                    Button(action: { toggleSave() }) {
-                        Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
-                            .foregroundColor(isSaved ? .blue : .gray)
-                            .scaleEffect(isSaved ? 1.1 : 1.0)
-                            .animation(.easeInOut(duration: 0.2), value: isSaved)
-                    }
-                    
-                    Image(systemName: "bubble.right")
-                        .foregroundColor(.gray)
-                    
-                    Image(systemName: "square.and.arrow.up")
-                        .foregroundColor(.gray)
+                Button(action: {
+                    isSaved.toggle()
+                }) {
+                    Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
+                        .font(.subheadline)
+                        .foregroundColor(isSaved ? .blue : .gray)
                 }
             }
         }
         .padding()
-        .background(Color(UIColor.systemBackground))
+        .background(Color(.systemBackground))
         .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
-        .task {
-            await checkSaveStatus()
-        }
-    }
-    
-    private func checkSaveStatus() async {
-        if let postId = post.id {
-            isSaved = await firebase.isItemSaved(itemId: postId, type: .post)
-        }
-    }
-    
-    private func toggleSave() {
-        guard let postId = post.id else { return }
-        
-        Task {
-            do {
-                isSaved = try await firebase.togglePostSave(postId)
-            } catch {
-                print("Error toggling save: \(error)")
-            }
-        }
+        .shadow(radius: 2)
     }
 }
 
-// Mini Service Card (Trending)
+// MARK: - Mini Service Card
 struct MiniServiceCard: View {
     let post: ServicePost
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Image placeholder
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [Color.blue.opacity(0.3), Color.purple.opacity(0.3)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+            // Image or placeholder - FIXED: using mediaURLs
+            if !post.mediaURLs.isEmpty, let firstImageURL = post.mediaURLs.first {
+                AsyncImage(url: URL(string: firstImageURL)) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 150, height: 100)
+                        .clipped()
+                        .cornerRadius(8)
+                } placeholder: {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.2))
+                        .frame(width: 150, height: 100)
+                        .cornerRadius(8)
+                        .overlay(
+                            Image(systemName: "photo")
+                                .foregroundColor(.gray)
+                        )
+                }
+            } else {
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: post.isRequest
+                                ? [Color.orange.opacity(0.3), Color.red.opacity(0.3)]
+                                : [Color.blue.opacity(0.3), Color.purple.opacity(0.3)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     )
-                )
-                .frame(width: 150, height: 150)
-                .cornerRadius(10)
-                .overlay(
-                    Image(systemName: "photo")
-                        .foregroundColor(.white)
-                        .font(.largeTitle)
-                )
+                    .frame(width: 150, height: 100)
+                    .cornerRadius(8)
+                    .overlay(
+                        VStack(spacing: 4) {
+                            Image(systemName: post.isRequest ? "questionmark.circle" : "briefcase")
+                                .font(.title2)
+                                .foregroundColor(.white)
+                            Text(post.isRequest ? "REQUEST" : "OFFER")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                        }
+                    )
+            }
             
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(post.title)
                     .font(.caption)
-                    .fontWeight(.medium)
-                    .lineLimit(2)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
                     .foregroundColor(.primary)
                 
                 if let price = post.price {
                     Text("$\(Int(price))")
-                        .font(.caption)
+                        .font(.caption2)
+                        .foregroundColor(.green)
                         .fontWeight(.bold)
-                        .foregroundColor(.blue)
                 }
             }
         }
         .frame(width: 150)
-        .padding(10)
-        .background(Color(UIColor.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
     }
 }
 
-// MARK: - Filter View
-struct FilterView: View {
-    @Environment(\.dismiss) private var dismiss
+// MARK: - Filters View
+struct FiltersView: View {
+    @Environment(\.dismiss) var dismiss
     @State private var selectedCategory: ServiceCategory?
     @State private var minPrice = ""
     @State private var maxPrice = ""
+    @State private var location = ""
     
     var body: some View {
         NavigationView {
@@ -437,43 +465,55 @@ struct FilterView: View {
                             Text(category.displayName).tag(category as ServiceCategory?)
                         }
                     }
-                    .pickerStyle(MenuPickerStyle())
                 }
                 
                 Section("Price Range") {
                     HStack {
                         TextField("Min", text: $minPrice)
                             .keyboardType(.numberPad)
-                        
-                        Text("-")
-                        
+                        Text("to")
                         TextField("Max", text: $maxPrice)
                             .keyboardType(.numberPad)
                     }
                 }
                 
+                Section("Location") {
+                    TextField("Enter location", text: $location)
+                }
+                
                 Section {
                     Button("Apply Filters") {
+                        // Apply filters logic
                         dismiss()
                     }
+                    .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    
-                    Button("Clear All") {
-                        selectedCategory = nil
-                        minPrice = ""
-                        maxPrice = ""
-                    }
-                    .frame(maxWidth: .infinity)
-                    .foregroundColor(.red)
+                    .padding()
+                    .background(Color.blue)
+                    .cornerRadius(10)
                 }
             }
             .navigationTitle("Filters")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Reset") {
+                        selectedCategory = nil
+                        minPrice = ""
+                        maxPrice = ""
+                        location = ""
+                    }
                 }
             }
         }
     }
 }
+
+// Note: ServiceCategory.displayName extension is already defined in DataModels.swift
+// No need to duplicate it here

@@ -4,6 +4,7 @@
 import Foundation
 import UIKit
 import CommonCrypto
+import UniformTypeIdentifiers
 
 struct ValidationHelper {
     
@@ -146,7 +147,7 @@ struct ValidationHelper {
         }
         
         // Validate image format (JPEG or PNG)
-        let imageTypes: [CFString] = [kUTTypeJPEG, kUTTypePNG]
+        let imageTypes: [CFString] = [UTType.jpeg.identifier as CFString, UTType.png.identifier as CFString]
         var isValidType = false
         
         if let cgImage = image.cgImage {

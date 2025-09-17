@@ -218,14 +218,14 @@ struct ConversationRow: View {
                 }
                 
                 HStack {
-                    if let senderId = conversation.lastMessageSenderId,
+                    if let senderId = conversation.lastMessage?.senderId,
                        senderId == currentUserId {
                         Image(systemName: "checkmark")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                     
-                    Text(conversation.lastMessage ?? "Start a conversation")
+                    Text(conversation.lastMessage?.text ?? "Start a conversation")
                         .font(.subheadline)
                         .foregroundColor(isUnread ? .primary : .secondary)
                         .fontWeight(isUnread ? .medium : .regular)

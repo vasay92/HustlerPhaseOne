@@ -29,7 +29,7 @@ struct EditServicePostView: View {
         _selectedCategory = State(initialValue: post.category)
         _price = State(initialValue: post.price != nil ? String(Int(post.price!)) : "")
         _location = State(initialValue: post.location ?? "")
-        _existingImageURLs = State(initialValue: post.imageURLs)
+        _existingImageURLs = State(initialValue: post.mediaURLs)  // FIXED: using mediaURLs
     }
     
     var body: some View {
@@ -80,11 +80,9 @@ struct EditServicePostView: View {
                                             }) {
                                                 Image(systemName: "xmark.circle.fill")
                                                     .foregroundColor(.white)
-                                                    .background(Color.black.opacity(0.6))
-                                                    .clipShape(Circle())
+                                                    .background(Circle().fill(Color.black.opacity(0.5)))
                                             }
-                                            .padding(4),
-                                            alignment: .topTrailing
+                                            .offset(x: 30, y: -30)
                                         )
                                     }
                                 }
@@ -112,11 +110,9 @@ struct EditServicePostView: View {
                                                 }) {
                                                     Image(systemName: "xmark.circle.fill")
                                                         .foregroundColor(.white)
-                                                        .background(Color.black.opacity(0.6))
-                                                        .clipShape(Circle())
+                                                        .background(Circle().fill(Color.black.opacity(0.5)))
                                                 }
-                                                .padding(4),
-                                                alignment: .topTrailing
+                                                .offset(x: 30, y: -30)
                                             )
                                     }
                                 }
@@ -124,126 +120,145 @@ struct EditServicePostView: View {
                         }
                     }
                     
-                    Button(action: { showingImagePicker = true }) {
-                        Label("Add Photos", systemImage: "camera.fill")
+                    Button(action: {
+                        showingImagePicker = true
+                    }) {
+                        Label("Add Photos", systemImage: "photo")
                             .frame(maxWidth: .infinity)
                     }
-                }
-                
-                Section("Post Status") {
-                    if post.status == .active {
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                            Text("Active")
-                                .foregroundColor(.green)
-                            Spacer()
-                            Text("Post is currently visible")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    } else {
-                        HStack {
-                            Image(systemName: post.status == .completed ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundColor(post.status == .completed ? .orange : .red)
-                            Text(post.status == .completed ? "Completed" : "Cancelled")
-                                .foregroundColor(post.status == .completed ? .orange : .red)
-                            Spacer()
-                        }
+                    .disabled(existingImageURLs.count + newImages.count >= 10)
+                    
+                    if existingImageURLs.count + newImages.count >= 10 {
+                        Text("Maximum 10 photos allowed")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
-                }
-                
-                Section {
-                    Button(action: {
-                        Task {
-                            await saveChanges()
-                        }
-                    }) {
-                        if isSaving {
-                            HStack {
-                                Spacer()
-                                ProgressView()
-                                Spacer()
-                            }
-                        } else {
-                            Text("Save Changes")
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .disabled(title.isEmpty || description.isEmpty || isSaving)
                 }
             }
             .navigationTitle("Edit Post")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        saveChanges()
+                    }
+                    .disabled(isSaving || title.isEmpty || description.isEmpty)
                 }
             }
-        }
-        .sheet(isPresented: $showingImagePicker) {
-            EditPostImagePicker(images: $newImages)
-        }
-        .alert("Error", isPresented: $showingError) {
-            Button("OK") { }
-        } message: {
-            Text(errorMessage)
-        }
-        .alert("Success!", isPresented: $showingSuccessMessage) {
-            Button("OK") { dismiss() }
-        } message: {
-            Text("Your post has been updated successfully!")
+            .overlay {
+                if isSaving {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                        .overlay {
+                            VStack(spacing: 20) {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(1.5)
+                                
+                                Text("Saving changes...")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                            }
+                            .padding(30)
+                            .background(Color.black.opacity(0.8))
+                            .cornerRadius(20)
+                        }
+                }
+            }
+            .alert("Error", isPresented: $showingError) {
+                Button("OK") { }
+            } message: {
+                Text(errorMessage)
+            }
+            .alert("Success", isPresented: $showingSuccessMessage) {
+                Button("OK") {
+                    dismiss()
+                }
+            } message: {
+                Text("Your post has been updated successfully!")
+            }
+            .sheet(isPresented: $showingImagePicker) {
+                EditImagePicker(images: $newImages, maxSelection: 10 - existingImageURLs.count)
+            }
         }
     }
     
-    private func saveChanges() async {
-        guard let postId = post.id else { return }
+    private func saveChanges() {
+        guard !title.isEmpty, !description.isEmpty else {
+            errorMessage = "Title and description are required"
+            showingError = true
+            return
+        }
         
         isSaving = true
         
-        do {
-            var newImageURLs: [String] = []
-            if !newImages.isEmpty {
-                for (index, image) in newImages.enumerated() {
-                    let path = "services/\(post.userId)/\(UUID().uuidString)_\(index).jpg"
-                    let url = try await firebase.uploadImage(image, path: path)
-                    newImageURLs.append(url)
+        Task {
+            do {
+                // Upload new images if any
+                var allImageURLs = existingImageURLs
+                
+                if !newImages.isEmpty {
+                    for image in newImages {
+                        // Generate a unique path for each image
+                        let imagePath = "posts/\(post.id ?? UUID().uuidString)/\(UUID().uuidString).jpg"
+                        let url = try await firebase.uploadImage(image, path: imagePath)
+                        allImageURLs.append(url)
+                    }
+                }
+                
+                // Update the post
+                var updatedPost = post
+                updatedPost.title = title
+                updatedPost.description = description
+                updatedPost.category = selectedCategory
+                updatedPost.price = Double(price)
+                updatedPost.location = location.isEmpty ? nil : location
+                updatedPost.mediaURLs = allImageURLs
+                updatedPost.updatedAt = Date()
+                
+                try await firebase.updatePost(
+                    postId: post.id ?? "",
+                    title: title,
+                    description: description,
+                    category: selectedCategory,
+                    price: Double(price),
+                    location: location.isEmpty ? nil : location,
+                    imageURLs: allImageURLs
+                )
+                
+                await MainActor.run {
+                    showingSuccessMessage = true
+                    isSaving = false
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    showingError = true
+                    isSaving = false
                 }
             }
-            
-            let allImageURLs = existingImageURLs + newImageURLs
-            let priceValue = Double(price) ?? 0
-            
-            try await firebase.updatePost(
-                postId: postId,
-                title: title,
-                description: description,
-                category: selectedCategory,
-                price: priceValue > 0 ? priceValue : nil,
-                location: location.isEmpty ? nil : location,
-                imageURLs: allImageURLs
-            )
-            
-            showingSuccessMessage = true
-        } catch {
-            errorMessage = error.localizedDescription
-            showingError = true
-            isSaving = false
         }
     }
 }
 
-// Local ImagePicker wrapper to avoid cross-file reference issues
-struct EditPostImagePicker: UIViewControllerRepresentable {
+// MARK: - Image Picker (Renamed to EditImagePicker to avoid conflict)
+struct EditImagePicker: UIViewControllerRepresentable {
     @Binding var images: [UIImage]
-    @Environment(\.dismiss) var dismiss
+    let maxSelection: Int
+    @Environment(\.presentationMode) var presentationMode
     
     func makeUIViewController(context: Context) -> PHPickerViewController {
-        var config = PHPickerConfiguration()
-        config.filter = .images
-        config.selectionLimit = 10
+        var configuration = PHPickerConfiguration()
+        configuration.filter = .images
+        configuration.selectionLimit = maxSelection
         
-        let picker = PHPickerViewController(configuration: config)
+        let picker = PHPickerViewController(configuration: configuration)
         picker.delegate = context.coordinator
         return picker
     }
@@ -255,23 +270,23 @@ struct EditPostImagePicker: UIViewControllerRepresentable {
     }
     
     class Coordinator: NSObject, PHPickerViewControllerDelegate {
-        let parent: EditPostImagePicker
+        let parent: EditImagePicker
         
-        init(_ parent: EditPostImagePicker) {
+        init(_ parent: EditImagePicker) {
             self.parent = parent
         }
         
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-            parent.dismiss()
-            
-            guard !results.isEmpty else { return }
+            parent.presentationMode.wrappedValue.dismiss()
             
             for result in results {
-                if result.itemProvider.canLoadObject(ofClass: UIImage.self) {
-                    result.itemProvider.loadObject(ofClass: UIImage.self) { [weak self] image, error in
+                let itemProvider = result.itemProvider
+                
+                if itemProvider.canLoadObject(ofClass: UIImage.self) {
+                    itemProvider.loadObject(ofClass: UIImage.self) { image, error in
                         if let image = image as? UIImage {
                             DispatchQueue.main.async {
-                                self?.parent.images.append(image)
+                                self.parent.images.append(image)
                             }
                         }
                     }

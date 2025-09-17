@@ -265,7 +265,7 @@ struct FullScreenReelView: View {
                             userInfoSection
                             
                             // Caption - No placeholders
-                            if !displayReel.title.isEmpty || !displayReel.description.isEmpty {
+                            if !(displayReel.caption ?? "").isEmpty {
                                 captionSection
                             }
                             
@@ -730,7 +730,7 @@ struct StatusBubble: View {
             VStack(spacing: 8) {
                 ZStack {
                     // Background image
-                    AsyncImage(url: URL(string: status.mediaURL)) { phase in
+                    AsyncImage(url: URL(string: status.mediaURL ?? "")) { phase in
                         switch phase {
                         case .success(let image):
                             image
@@ -969,7 +969,7 @@ struct StatusViewerView: View {
             Color.black.ignoresSafeArea()
             
             // Status Image
-            AsyncImage(url: URL(string: status.mediaURL)) { image in
+            AsyncImage(url: URL(string: status.mediaURL ?? "")) { image in
                 image
                     .resizable()
                     .scaledToFit()
@@ -1108,7 +1108,7 @@ struct StatusViewerView: View {
                 contextType: .status,
                 contextId: status.id,
                 contextData: (
-                    title: status.caption ?? "Status Update",
+                    title: status.text ?? "Status Update",
                     image: status.mediaURL,
                     userId: status.userId
                 ),

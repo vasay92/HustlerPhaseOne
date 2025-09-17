@@ -2,13 +2,14 @@
 // Path: ClaudeHustlerFirebase/Views/Services/ServicesView.swift
 
 import SwiftUI
+import FirebaseFirestore
 
 struct ServicesView: View {
     @StateObject private var firebase = FirebaseService.shared
     @State private var selectedTab: ServiceTab = .offers
-    @State private var selectedCategory: ServiceCategory? = nil
-    @State private var searchText = ""
     @State private var showingFilters = false
+    @State private var selectedCategory: ServiceCategory?
+    @State private var searchText = ""
     @State private var viewMode: ViewMode = .grid
     
     enum ServiceTab {
@@ -19,142 +20,157 @@ struct ServicesView: View {
         case grid, list
     }
     
-    var currentPosts: [ServicePost] {
-        selectedTab == .offers ? firebase.offers : firebase.requests
-    }
-    
     var filteredPosts: [ServicePost] {
-        var posts = currentPosts
+        let posts = selectedTab == .offers
+            ? firebase.posts.filter { !$0.isRequest }
+            : firebase.posts.filter { $0.isRequest }
+        
+        var filtered = posts
         
         if let category = selectedCategory {
-            posts = posts.filter { $0.category == category }
+            filtered = filtered.filter { $0.category == category }
         }
         
         if !searchText.isEmpty {
-            posts = posts.filter {
+            filtered = filtered.filter {
                 $0.title.localizedCaseInsensitiveContains(searchText) ||
                 $0.description.localizedCaseInsensitiveContains(searchText)
             }
         }
         
-        return posts
+        return filtered
     }
-    
-    // 3 columns for grid
-    let columns = [
-        GridItem(.flexible(), spacing: 10),
-        GridItem(.flexible(), spacing: 10),
-        GridItem(.flexible(), spacing: 10)
-    ]
     
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                // Tab Selector for Offers/Requests - Now at the very top
-                HStack(spacing: 0) {
-                    Button(action: { selectedTab = .offers }) {
-                        VStack(spacing: 4) {
-                            Text("Offers")
-                                .font(.headline)
-                                .foregroundColor(selectedTab == .offers ? .primary : .gray)
+                // Custom Header
+                VStack(spacing: 15) {
+                    // Title Bar
+                    HStack {
+                        Text(selectedTab == .offers ? "Service Offers" : "Service Requests")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                        
+                        Spacer()
+                        
+                        // View Mode Toggle
+                        HStack(spacing: 8) {
+                            Button(action: { viewMode = .grid }) {
+                                Image(systemName: "square.grid.2x2")
+                                    .font(.title2)
+                                    .foregroundColor(viewMode == .grid ? .blue : .gray)
+                            }
                             
-                            Rectangle()
-                                .fill(selectedTab == .offers ? Color.blue : Color.clear)
-                                .frame(height: 3)
+                            Button(action: { viewMode = .list }) {
+                                Image(systemName: "list.bullet")
+                                    .font(.title2)
+                                    .foregroundColor(viewMode == .list ? .blue : .gray)
+                            }
+                        }
+                        
+                        Button(action: { showingFilters = true }) {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                                .font(.title2)
+                                .foregroundColor(.blue)
                         }
                     }
-                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal)
                     
-                    Button(action: { selectedTab = .requests }) {
-                        VStack(spacing: 4) {
-                            Text("Requests")
-                                .font(.headline)
-                                .foregroundColor(selectedTab == .requests ? .primary : .gray)
-                            
-                            Rectangle()
-                                .fill(selectedTab == .requests ? Color.orange : Color.clear)
-                                .frame(height: 3)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .padding(.horizontal)
-                .padding(.top)
-                
-                // Search Bar
-                HStack {
+                    // Search Bar
                     HStack {
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(.gray)
-                        
-                        TextField(selectedTab == .offers ? "Search services..." : "Search requests...", text: $searchText)
-                            .textFieldStyle(PlainTextFieldStyle())
+                        TextField("Search services...", text: $searchText)
                     }
                     .padding(10)
-                    .background(Color(.systemGray6))
+                    .background(Color.gray.opacity(0.1))
                     .cornerRadius(10)
+                    .padding(.horizontal)
                     
-                    Button(action: { showingFilters = true }) {
-                        Image(systemName: "slider.horizontal.3")
-                            .foregroundColor(.primary)
-                            .overlay(
-                                // Show indicator if filter is active
-                                selectedCategory != nil ?
-                                Circle()
-                                    .fill(Color.red)
-                                    .frame(width: 8, height: 8)
-                                    .offset(x: 8, y: -8)
-                                : nil
-                            )
+                    // Tab Selection
+                    Picker("Service Type", selection: $selectedTab) {
+                        Text("Offers").tag(ServiceTab.offers)
+                        Text("Requests").tag(ServiceTab.requests)
                     }
+                    .pickerStyle(SegmentedPickerStyle())
+                    .padding(.horizontal)
                     
-                    Button(action: {
-                        viewMode = viewMode == .grid ? .list : .grid
-                    }) {
-                        Image(systemName: viewMode == .grid ? "square.grid.3x3" : "list.bullet")
-                            .foregroundColor(.primary)
+                    // Category Filter Pills (optional)
+                    if selectedCategory != nil {
+                        HStack {
+                            Text(selectedCategory!.displayName)
+                                .font(.caption)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.blue.opacity(0.1))
+                                .foregroundColor(.blue)
+                                .cornerRadius(15)
+                            
+                            Button(action: { selectedCategory = nil }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.gray)
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal)
                     }
                 }
-                .padding()
+                .padding(.bottom, 10)
+                .background(Color(.systemBackground))
                 
-                // Services Grid/List
-                ScrollView {
-                    if filteredPosts.isEmpty {
-                        ServicesEmptyStateView(isRequest: selectedTab == .requests)
-                            .padding(.top, 50)
-                    } else {
-                        if viewMode == .grid {
-                            LazyVGrid(columns: columns, spacing: 10) {
-                                ForEach(filteredPosts) { post in
-                                    NavigationLink(destination: PostDetailView(post: post)) {
-                                        MinimalServiceCard(post: post, isRequest: post.isRequest)
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
+                // Content based on view mode
+                if viewMode == .grid {
+                    ScrollView {
+                        LazyVGrid(columns: [
+                            GridItem(.flexible(), spacing: 10),
+                            GridItem(.flexible(), spacing: 10),
+                            GridItem(.flexible(), spacing: 10)
+                        ], spacing: 10) {
+                            ForEach(filteredPosts) { post in
+                                NavigationLink(destination: PostDetailView(post: post)) {
+                                    MinimalServiceCard(post: post, isRequest: post.isRequest)
                                 }
+                                .buttonStyle(PlainButtonStyle())
                             }
-                            .padding(.horizontal, 10)
+                        }
+                        .padding(.horizontal, 10)
+                        
+                        if filteredPosts.isEmpty {
+                            EmptyStateServiceView(isRequest: selectedTab == .requests)
+                                .padding(.top, 100)
+                        }
+                    }
+                } else {
+                    List {
+                        ForEach(filteredPosts) { post in
+                            NavigationLink(destination: PostDetailView(post: post)) {
+                                ServiceListCard(post: post, isRequest: post.isRequest)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .listRowInsets(EdgeInsets(top: 5, leading: 10, bottom: 5, trailing: 10))
+                        }
+                        
+                        if filteredPosts.isEmpty {
+                            EmptyStateServiceView(isRequest: selectedTab == .requests)
+                                .listRowInsets(EdgeInsets())
+                                .listRowBackground(Color.clear)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 100)
+                        }
+                    }
+                    .listStyle(PlainListStyle())
+                    .refreshable {
+                        if selectedTab == .offers {
+                            await firebase.loadOffers()
                         } else {
-                            LazyVStack(spacing: 10) {
-                                ForEach(filteredPosts) { post in
-                                    NavigationLink(destination: PostDetailView(post: post)) {
-                                        ServiceListCard(post: post, isRequest: post.isRequest)
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
-                                }
-                            }
-                            .padding(.horizontal)
+                            await firebase.loadRequests()
                         }
                     }
                 }
-                .refreshable {
-                    if selectedTab == .offers {
-                        await firebase.loadOffers()
-                    } else {
-                        await firebase.loadRequests()
-                    }
-                }
             }
-            .navigationBarHidden(true) // Hide the navigation bar completely
+            .navigationBarHidden(true)
             .sheet(isPresented: $showingFilters) {
                 EnhancedFiltersView(
                     selectedCategory: $selectedCategory,
@@ -173,25 +189,23 @@ struct MinimalServiceCard: View {
     let post: ServicePost
     let isRequest: Bool
     
-    // Calculate card width based on screen size
     private var cardWidth: CGFloat {
-        // Screen width minus padding (20) and spacing between cards (20 total for 2 gaps)
-        return (UIScreen.main.bounds.width - 40) / 3
+        (UIScreen.main.bounds.width - 40) / 3
     }
     
     var body: some View {
         VStack(spacing: 0) {
             // Image Section with Price Overlay - 80% of card
             ZStack(alignment: .bottomTrailing) {
-                // Image or Placeholder
-                if !post.imageURLs.isEmpty, let firstImageURL = post.imageURLs.first {
+                // Image or Placeholder - FIXED: using mediaURLs
+                if !post.mediaURLs.isEmpty, let firstImageURL = post.mediaURLs.first {
                     AsyncImage(url: URL(string: firstImageURL)) { phase in
                         switch phase {
                         case .success(let image):
                             image
                                 .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: cardWidth, height: cardWidth * 1.2) // 80% of total height
+                                .scaledToFill()
+                                .frame(width: cardWidth, height: cardWidth * 1.2)
                                 .clipped()
                         case .failure(_):
                             imagePlaceholder
@@ -210,55 +224,43 @@ struct MinimalServiceCard: View {
                     imagePlaceholder
                 }
                 
-                // Price Overlay on Image
-                HStack {
-                    if let price = post.price {
-                        Text("$\(Int(price))")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule()
-                                    .fill(isRequest ? Color.orange : Color.green)
-                            )
-                    } else {
-                        Text(isRequest ? "Flexible" : "Contact")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule()
-                                    .fill(Color.black.opacity(0.6))
-                            )
-                    }
+                // Price Overlay
+                if let price = post.price {
+                    Text("$\(Int(price))")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.black.opacity(0.7))
+                        .cornerRadius(4)
+                        .offset(x: -4, y: -4)
                 }
-                .padding(6)
             }
             .frame(width: cardWidth, height: cardWidth * 1.2)
             .clipped()
             
-            // Title Section - 20% of card
-            Text(post.title)
-                .font(.caption)
-                .fontWeight(.medium)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .foregroundColor(.primary)
-                .frame(width: cardWidth - 12, alignment: .leading)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 6)
-                .frame(height: cardWidth * 0.3) // 20% of total height
+            // Title - 20% of card
+            VStack(spacing: 2) {
+                Text(post.title)
+                    .font(.system(size: 11))
+                    .fontWeight(.medium)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.primary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 4)
+            }
+            .frame(height: cardWidth * 0.3)
+            .background(Color(.systemBackground))
         }
-        .frame(width: cardWidth, height: cardWidth * 1.5) // Total height with aspect ratio
-        .background(Color(.systemBackground))
-        .cornerRadius(10)
-        .shadow(color: .black.opacity(0.05), radius: 3, x: 0, y: 2)
+        .frame(width: cardWidth)
+        .cornerRadius(8)
+        .shadow(radius: 2)
     }
     
+    @ViewBuilder
     var imagePlaceholder: some View {
         Rectangle()
             .fill(
@@ -291,11 +293,20 @@ struct MinimalServiceCard: View {
         case .delivery: return "shippingbox.fill"
         case .electrical: return "bolt.fill"
         case .plumbing: return "drop.fill"
-        case .carpentry: return "hammer.fill"
+        case .handyman: return "hammer.fill"  // FIXED: changed from .carpentry
         case .painting: return "paintbrush.fill"
         case .landscaping: return "leaf.fill"
         case .moving: return "box.truck.fill"
-        case .technology: return "desktopcomputer"
+        case .personalTraining: return "figure.run"
+        case .photography: return "camera.fill"
+        case .videography: return "video.fill"
+        case .webDesign: return "globe"
+        case .graphicDesign: return "paintpalette.fill"
+        case .writing: return "pencil"
+        case .translation: return "character.book.closed.fill"
+        case .petCare: return "pawprint.fill"
+        case .childCare: return "figure.and.child.holdinghands"
+        case .assembly: return "screwdriver.fill"
         case .other: return "ellipsis.circle.fill"
         }
     }
@@ -308,8 +319,8 @@ struct ServiceListCard: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            // Image or placeholder
-            if !post.imageURLs.isEmpty, let firstImageURL = post.imageURLs.first {
+            // Image or placeholder - FIXED: using mediaURLs
+            if !post.mediaURLs.isEmpty, let firstImageURL = post.mediaURLs.first {
                 AsyncImage(url: URL(string: firstImageURL)) { phase in
                     switch phase {
                     case .success(let image):
@@ -349,10 +360,10 @@ struct ServiceListCard: View {
                     Text(isRequest ? "REQUEST" : "OFFER")
                         .font(.caption2)
                         .fontWeight(.bold)
-                        .foregroundColor(.white)
+                        .foregroundColor(isRequest ? .orange : .blue)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(isRequest ? Color.orange : Color.blue)
+                        .background(isRequest ? Color.orange.opacity(0.2) : Color.blue.opacity(0.2))
                         .cornerRadius(4)
                 }
                 
@@ -363,25 +374,31 @@ struct ServiceListCard: View {
                 
                 HStack {
                     if let price = post.price {
-                        Text(isRequest ? "Budget: $\(Int(price))" : "$\(Int(price))")
-                            .font(.headline)
-                            .foregroundColor(isRequest ? .orange : .green)
+                        Label("$\(Int(price))", systemImage: "tag.fill")
+                            .font(.caption)
+                            .foregroundColor(.green)
                     }
                     
                     Spacer()
+                    
+                    if let location = post.location {
+                        Label(location, systemImage: "location")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                     
                     Text(post.createdAt, style: .relative)
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
             }
+            
+            Spacer()
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+        .padding(.vertical, 8)
     }
     
+    @ViewBuilder
     var imagePlaceholder: some View {
         Rectangle()
             .fill(
@@ -397,6 +414,7 @@ struct ServiceListCard: View {
             .cornerRadius(10)
             .overlay(
                 Image(systemName: "briefcase.fill")
+                    .font(.title2)
                     .foregroundColor(.white)
             )
     }
@@ -406,43 +424,41 @@ struct ServiceListCard: View {
 struct EnhancedFiltersView: View {
     @Binding var selectedCategory: ServiceCategory?
     let selectedTab: ServicesView.ServiceTab
-    @Environment(\.dismiss) private var dismiss
-    @State private var priceRange = 0...500.0
-    @State private var sortBy = "Newest"
+    @Environment(\.dismiss) var dismiss
     
-    let sortOptions = ["Newest", "Price: Low to High", "Price: High to Low", "Most Popular"]
+    @State private var priceRange: ClosedRange<Double> = 0...500
+    @State private var location = ""
+    @State private var sortBy: SortOption = .newest
+    
+    enum SortOption: String, CaseIterable {
+        case newest = "Newest First"
+        case oldest = "Oldest First"
+        case priceLow = "Price: Low to High"
+        case priceHigh = "Price: High to Low"
+    }
     
     var body: some View {
         NavigationView {
             Form {
-                // Category Section
                 Section("Category") {
-                    ForEach([nil] + ServiceCategory.allCases.map { $0 as ServiceCategory? }, id: \.self) { category in
+                    ScrollView(.horizontal, showsIndicators: false) {
                         HStack {
-                            Text(category?.displayName ?? "All Categories")
-                                .foregroundColor(.primary)
+                            CategoryPill(
+                                title: "All",
+                                isSelected: selectedCategory == nil,
+                                action: { selectedCategory = nil }
+                            )
                             
-                            Spacer()
-                            
-                            if selectedCategory == category {
-                                Image(systemName: "checkmark")
-                                    .foregroundColor(.blue)
+                            ForEach(ServiceCategory.allCases, id: \.self) { category in
+                                CategoryPill(
+                                    title: category.displayName,
+                                    isSelected: selectedCategory == category,
+                                    action: { selectedCategory = category }
+                                )
                             }
                         }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            selectedCategory = category
-                        }
+                        .padding(.vertical, 5)
                     }
-                }
-                
-                Section("Sort By") {
-                    Picker("Sort By", selection: $sortBy) {
-                        ForEach(sortOptions, id: \.self) { option in
-                            Text(option).tag(option)
-                        }
-                    }
-                    .pickerStyle(MenuPickerStyle())
                 }
                 
                 Section("Price Range") {
@@ -454,47 +470,77 @@ struct EnhancedFiltersView: View {
                         }
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        
+                        // Price slider would go here
                     }
                 }
                 
-                Section {
-                    Button("Apply Filters") {
-                        dismiss()
+                Section("Location") {
+                    TextField("City or ZIP code", text: $location)
+                }
+                
+                Section("Sort By") {
+                    Picker("Sort", selection: $sortBy) {
+                        ForEach(SortOption.allCases, id: \.self) { option in
+                            Text(option.rawValue).tag(option)
+                        }
                     }
-                    .frame(maxWidth: .infinity)
-                    
-                    Button("Clear All") {
-                        selectedCategory = nil
-                        priceRange = 0...500.0
-                        sortBy = "Newest"
-                        dismiss()
-                    }
-                    .frame(maxWidth: .infinity)
-                    .foregroundColor(.red)
+                    .pickerStyle(MenuPickerStyle())
                 }
             }
             .navigationTitle("Filters")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Reset") {
+                        selectedCategory = nil
+                        priceRange = 0...500
+                        location = ""
+                        sortBy = .newest
+                    }
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button("Done") {
+                        dismiss()
+                    }
                 }
             }
         }
     }
 }
 
-// MARK: - Empty State
-struct ServicesEmptyStateView: View {
+// MARK: - Supporting Views
+struct CategoryPill: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(isSelected ? Color.blue : Color.gray.opacity(0.2))
+                .foregroundColor(isSelected ? .white : .primary)
+                .cornerRadius(20)
+        }
+    }
+}
+
+struct EmptyStateServiceView: View {
     let isRequest: Bool
     
     var body: some View {
         VStack(spacing: 20) {
-            Image(systemName: isRequest ? "person.fill.questionmark" : "briefcase")
+            Image(systemName: isRequest ? "magnifyingglass" : "briefcase")
                 .font(.system(size: 60))
                 .foregroundColor(.gray)
             
-            Text(isRequest ? "No requests found" : "No services offered")
+            Text(isRequest
+                ? "No requests found"
+                : "No services offered")
                 .font(.headline)
                 .foregroundColor(.primary)
             

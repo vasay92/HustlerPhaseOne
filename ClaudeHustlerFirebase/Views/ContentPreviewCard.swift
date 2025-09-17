@@ -39,38 +39,52 @@ struct ContentPreviewCard: View {
     
     private var contentTypeIcon: String {
         switch message.contextType {
-        case .post:
+        case .some(.post):
             return "briefcase.fill"
-        case .reel:
+        case .some(.reel):
             return "play.rectangle.fill"
-        case .status:
+        case .some(.status):
             return "circle.dashed"
-        case .none:
+        case .some(.service):
+            return "briefcase.fill"
+        case .some(.portfolio):
+            return "photo.on.rectangle"
+        case .some(.general), .none:
             return "square.fill"
         }
     }
     
     private var contentTypeColor: Color {
         switch message.contextType {
-        case .post:
+        case .some(.post):
             return .blue
-        case .reel:
+        case .some(.reel):
             return .purple
-        case .status:
+        case .some(.status):
             return .orange
-        case .none:
+        case .some(.service):
+            return .blue
+        case .some(.portfolio):
+            return .green
+        case .some(.general), .none:
             return .gray
         }
     }
     
     private var contentTypeLabel: String {
         switch message.contextType {
-        case .post:
+        case .some(.post):
             return "Service Post"
-        case .reel:
+        case .some(.reel):
             return "Reel"
-        case .status:
+        case .some(.status):
             return "Status"
+        case .some(.service):
+            return "Service"
+        case .some(.portfolio):
+            return "Portfolio"
+        case .some(.general):
+            return "Shared Content"
         case .none:
             return "Content"
         }
@@ -128,45 +142,38 @@ struct ContentPreviewCard: View {
                 
                 // Content info
                 VStack(alignment: .leading, spacing: 4) {
+                    Text(contentTypeLabel)
+                        .font(.caption)
+                        .foregroundColor(contentTypeColor)
+                        .fontWeight(.semibold)
+                    
                     Text(contentTitle)
                         .font(.subheadline)
-                        .fontWeight(.medium)
                         .foregroundColor(.primary)
                         .lineLimit(1)
                     
-                    HStack(spacing: 4) {
-                        Image(systemName: contentTypeIcon)
-                            .font(.caption2)
-                            .foregroundColor(contentTypeColor)
-                        
-                        Text(contentTypeLabel)
+                    if loadError {
+                        Label("Content unavailable", systemImage: "exclamationmark.triangle")
                             .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        if isLoading {
-                            ProgressView()
-                                .scaleEffect(0.5)
-                        } else if loadError {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.caption2)
-                                .foregroundColor(.orange)
-                        }
+                            .foregroundColor(.red)
                     }
                 }
                 
                 Spacer()
                 
-                // Chevron
-                if !isLoading && !loadError {
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                } else if !loadError {
                     Image(systemName: "chevron.right")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
             }
-            .padding(8)
-            .background(Color(.systemGray6))
+            .padding(10)
+            .background(Color.gray.opacity(0.08))
             .cornerRadius(12)
-            .opacity(loadError ? 0.6 : 1.0)
+            .opacity(isLoading || loadError ? 0.6 : 1.0)
         }
         .buttonStyle(PlainButtonStyle())
         .disabled(isLoading || loadError)
@@ -197,32 +204,34 @@ struct ContentPreviewCard: View {
             )
     }
     
+    
     @ViewBuilder
     private var contentDetailView: some View {
-        Group {
-            switch message.contextType {
-            case .post:
-                if let post = contentPost {
-                    // Use the wrapper with close button for posts
-                    PostDetailViewWithClose(post: post)
-                } else {
-                    ContentNotFoundView()
-                }
-            case .reel:
-                if let reel = contentReel {
-                    ReelViewerView(reel: reel)
-                } else {
-                    ContentNotFoundView()
-                }
-            case .status:
-                if let status = contentStatus {
-                    StatusViewerView(status: status)
-                } else {
-                    ContentNotFoundView()
-                }
-            case .none:
+        switch message.contextType {
+        case .some(.post), .some(.service):
+            if let post = contentPost {
+                PostDetailViewWithClose(post: post)
+            } else {
                 ContentNotFoundView()
             }
+        case .some(.reel):
+            if let reel = contentReel {
+                ReelViewerView(reel: reel)
+            } else {
+                ContentNotFoundView()
+            }
+        case .some(.status):
+            if let status = contentStatus {
+                StatusViewerView(status: status)
+            } else {
+                ContentNotFoundView()
+            }
+        case .some(.portfolio):
+            // PortfolioDetailView needs different parameters
+            // For now, show not found until we can properly fetch the portfolio card
+            ContentNotFoundView()
+        case .some(.general), .none:
+            ContentNotFoundView()
         }
     }
     
@@ -234,7 +243,7 @@ struct ContentPreviewCard: View {
         
         guard let contextId = message.contextId,
               let contextType = message.contextType else {
-            print("⌠Missing context")
+            print("⚠️ Missing context")
             isLoading = false
             loadError = true
             return
@@ -248,7 +257,7 @@ struct ContentPreviewCard: View {
             let db = firebase.db
             
             switch contextType {
-            case .post:
+            case .post, .service:
                 let document = try await db.collection("posts")
                     .document(contextId)
                     .getDocument()
@@ -289,7 +298,7 @@ struct ContentPreviewCard: View {
                         self.loadError = (reel == nil)
                     }
                     
-                    print("✅ Successfully loaded reel: \(reel?.title ?? "nil")")
+                    print("✅ Successfully loaded reel: \(reel?.caption ?? "nil")")
                 } else {
                     await MainActor.run {
                         self.isLoading = false
@@ -322,9 +331,25 @@ struct ContentPreviewCard: View {
                     }
                     print("⚠️ Status document doesn't exist")
                 }
+                
+            case .portfolio:
+                // Portfolio items might need different loading logic
+                print("Portfolio loading not yet implemented")
+                await MainActor.run {
+                    self.isLoading = false
+                    self.loadError = false
+                }
+                
+            case .general:
+                // General content doesn't need specific loading
+                print("General content - no specific loading needed")
+                await MainActor.run {
+                    self.isLoading = false
+                    self.loadError = false
+                }
             }
         } catch {
-            print("⌠Error loading content: \(error)")
+            print("❌ Error loading content: \(error)")
             await MainActor.run {
                 self.isLoading = false
                 self.loadError = true
@@ -383,3 +408,8 @@ struct ContentNotFoundView: View {
         }
     }
 }
+
+// Note: ReelViewerView, StatusViewerView, and PortfolioDetailView are defined in other files:
+// - ReelViewerView is in ReelsView.swift
+// - StatusViewerView is in ReelsView.swift
+// - PortfolioDetailView is in ProfileSupportingViews.swift
